@@ -1,15 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
 
-# Always store DB inside current directory
-DB_FILE = os.path.join(os.getcwd(), "dating.db")
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_FILE}"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./dating.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
