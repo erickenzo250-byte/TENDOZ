@@ -1,63 +1,70 @@
 import streamlit as st
-import requests
-import asyncio
-import websockets
+from backend.database import SessionLocal, engine, Base
+from backend import crud, models
 
-BASE_URL = "http://localhost:8000"  # Change to deployed backend
+# Create DB tables
+Base.metadata.create_all(bind=engine)
 
-st.sidebar.title("Dating App")
+st.set_page_config(page_title="💖 Dating App", layout="wide")
+
+# Session state
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# Tabs
 menu = ["My Profile", "Explore", "Chat"]
-choice = st.sidebar.radio("Menu", menu)
+choice = st.sidebar.selectbox("Menu", menu)
 
-if "user_id" not in st.session_state:
-    st.session_state.user_id = 1  # mock login
+db = SessionLocal()
 
-# ---------- PROFILE ----------
+# --- My Profile ---
 if choice == "My Profile":
-    st.header("👤 My Profile")
-    res = requests.get(f"{BASE_URL}/users/{st.session_state.user_id}")
-    if res.ok:
-        user = res.json()
-        st.write(f"**{user['username']}** ({user['age']}, {user['gender']})")
-        st.write(f"✨ Interests: {user['interests']}")
-        st.write(f"💬 Bio: {user['bio']}")
-    else:
-        st.error("User not found")
+    st.title("👤 My Profile")
+    username = st.text_input("Username", "")
+    age = st.number_input("Age", 18, 100, 25)
+    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+    bio = st.text_area("Bio")
+    interests = st.text_input("Interests (comma separated)")
 
-# ---------- EXPLORE ----------
+    if st.button("Save / Login"):
+        user = crud.get_or_create_user(db, username, age, gender, bio, interests)
+        st.session_state.user = user
+        st.success(f"Logged in as {user.username}")
+
+# --- Explore ---
 elif choice == "Explore":
-    st.header("🌍 Explore Profiles")
-    gender = st.selectbox("Gender", ["", "Male", "Female", "Other"])
-    min_age, max_age = st.slider("Age Range", 18, 100, (20, 40))
-    interest = st.text_input("Interest")
+    st.title("🌍 Explore Profiles")
+    if not st.session_state.user:
+        st.warning("Please log in first (My Profile).")
+    else:
+        users = crud.get_users(db, exclude_id=st.session_state.user.id)
+        for u in users:
+            with st.container():
+                st.subheader(f"{u.username} ({u.age}, {u.gender})")
+                st.write(f"💬 {u.bio}")
+                st.write(f"✨ Interests: {u.interests}")
+                st.markdown("---")
 
-    params = {"min_age": min_age, "max_age": max_age}
-    if gender:
-        params["gender"] = gender
-    if interest:
-        params["interest"] = interest
-
-    res = requests.get(f"{BASE_URL}/explore", params=params)
-    if res.ok:
-        for u in res.json():
-            if u["id"] == st.session_state.user_id: continue
-            st.subheader(f"{u['username']} ({u['age']}, {u['gender']})")
-            st.write(u["bio"])
-            st.write(f"✨ {u['interests']}")
-            if st.button(f"Like {u['username']}", key=u["id"]):
-                r = requests.post(f"{BASE_URL}/like/", params={"liker_id": st.session_state.user_id, "liked_id": u["id"]})
-                result = r.json()
-                if result["match"]:
-                    st.success("💖 It's a match! Start chatting.")
-
-# ---------- CHAT ----------
+# --- Chat ---
 elif choice == "Chat":
-    st.header("💬 Chat")
-    receiver_id = st.number_input("Chat with user ID", min_value=1, step=1)
-    msg = st.text_input("Message")
-    if st.button("Send"):
-        async def send_message():
-            async with websockets.connect(f"ws://localhost:8000/ws/{st.session_state.user_id}") as ws:
-                await ws.send(f"{receiver_id}|{msg}")
-        asyncio.run(send_message())
-    st.info("Real-time chat coming here (typing, emojis, receipts)")
+    st.title("💬 Chat")
+    if not st.session_state.user:
+        st.warning("Please log in first (My Profile).")
+    else:
+        users = crud.get_users(db, exclude_id=st.session_state.user.id)
+        partner = st.selectbox("Choose someone to chat with", [u.username for u in users] if users else [])
+        if partner:
+            partner_user = [u for u in users if u.username == partner][0]
+            chat_id = f"{min(st.session_state.user.id, partner_user.id)}-{max(st.session_state.user.id, partner_user.id)}"
+
+            # Messages
+            messages = crud.get_messages(db, chat_id)
+            for m in messages:
+                sender = "You" if m.sender_id == st.session_state.user.id else partner_user.username
+                st.write(f"**{sender}**: {m.content} ({m.timestamp})")
+
+            # New message
+            msg = st.text_input("Type a message")
+            if st.button("Send"):
+                crud.create_message(db, chat_id, st.session_state.user.id, partner_user.id, msg)
+                st.experimental_rerun()
