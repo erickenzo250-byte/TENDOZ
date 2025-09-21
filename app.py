@@ -1,19 +1,17 @@
 import streamlit as st
 from backend.database import SessionLocal, engine, Base
 from backend import crud, models
+import os
 
-# Create DB tables
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
 st.set_page_config(page_title="💖 Dating App", layout="wide")
 
-# --- Session State ---
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# --- Sidebar Menu ---
-menu = ["My Profile", "Explore", "Chat"]
+menu = ["My Profile", "Explore", "Matches", "Chat"]
 choice = st.sidebar.radio("Menu", menu)
 
 # --- MY PROFILE ---
@@ -25,72 +23,78 @@ if choice == "My Profile":
     bio = st.text_area("Bio")
     interests = st.text_input("Interests (comma separated)")
 
+    # Optional: profile picture upload
+    picture_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"])
+    pic_filename = ""
+    if picture_file:
+        os.makedirs("assets", exist_ok=True)
+        pic_filename = f"assets/{username}.png"
+        with open(pic_filename, "wb") as f:
+            f.write(picture_file.getbuffer())
+
     if st.button("Save / Login"):
-        user = crud.get_or_create_user(db, username, age, gender, bio, interests)
+        user = crud.create_or_get_user(db, username, age, gender, bio, interests, pic_filename)
         st.session_state.user = user
         st.success(f"Logged in as {user.username}")
 
 # --- EXPLORE ---
 elif choice == "Explore":
     st.title("🌍 Explore Profiles")
-
     if not st.session_state.user:
         st.warning("Please log in first (My Profile).")
     else:
-        # Filters
-        st.sidebar.subheader("Filters")
-        gender_filter = st.sidebar.selectbox("Gender", ["Any", "Male", "Female", "Other"])
-        age_range = st.sidebar.slider("Age Range", 18, 100, (20, 40))
-        interest_filter = st.sidebar.text_input("Interest Contains", "")
-
-        # Get users
         users = crud.get_users(db, exclude_id=st.session_state.user.id)
-        filtered = []
         for u in users:
-            if gender_filter != "Any" and u.gender != gender_filter:
-                continue
-            if not (age_range[0] <= u.age <= age_range[1]):
-                continue
-            if interest_filter and interest_filter.lower() not in u.interests.lower():
-                continue
-            filtered.append(u)
+            with st.container():
+                st.subheader(f"{u.username} ({u.age}, {u.gender})")
+                st.write(f"💬 {u.bio}")
+                st.write(f"✨ Interests: {u.interests}")
+                if u.picture and os.path.exists(u.picture):
+                    st.image(u.picture, width=150)
+                if st.button(f"Like {u.username}", key=f"like_{u.id}"):
+                    crud.like_user(db, st.session_state.user.id, u.id)
+                    st.success(f"You liked {u.username}!")
+                st.markdown("---")
 
-        if not filtered:
-            st.info("No profiles found.")
-        else:
-            for u in filtered:
-                with st.container():
-                    st.subheader(f"{u.username} ({u.age}, {u.gender})")
-                    st.write(f"💬 {u.bio}")
-                    st.write(f"✨ Interests: {u.interests}")
-                    if st.button(f"Like {u.username}", key=f"like_{u.id}"):
-                        # Here you could implement match logic later
-                        st.success(f"You liked {u.username}!")
-
-                    st.markdown("---")
+# --- MATCHES ---
+elif choice == "Matches":
+    st.title("❤️ Matches")
+    if not st.session_state.user:
+        st.warning("Please log in first (My Profile).")
+    else:
+        matches_ids = crud.get_matches(db, st.session_state.user.id)
+        matches = [db.query(models.User).get(mid) for mid in matches_ids]
+        if not matches:
+            st.info("No matches yet. Like users to find matches!")
+        for u in matches:
+            st.subheader(f"{u.username} ({u.age}, {u.gender})")
+            st.write(f"💬 {u.bio}")
+            st.write(f"✨ Interests: {u.interests}")
+            if u.picture and os.path.exists(u.picture):
+                st.image(u.picture, width=150)
+            st.markdown("---")
 
 # --- CHAT ---
 elif choice == "Chat":
     st.title("💬 Chat")
-
     if not st.session_state.user:
         st.warning("Please log in first (My Profile).")
     else:
-        users = crud.get_users(db, exclude_id=st.session_state.user.id)
-        if not users:
-            st.info("No users to chat with yet.")
+        matches_ids = crud.get_matches(db, st.session_state.user.id)
+        if not matches_ids:
+            st.info("No matches to chat with yet.")
         else:
-            partner = st.selectbox("Choose someone to chat with", [u.username for u in users])
-            partner_user = next(u for u in users if u.username == partner)
+            matches = [db.query(models.User).get(mid) for mid in matches_ids]
+            partner = st.selectbox("Choose someone to chat with", [u.username for u in matches])
+            partner_user = next(u for u in matches if u.username == partner)
             chat_id = f"{min(st.session_state.user.id, partner_user.id)}-{max(st.session_state.user.id, partner_user.id)}"
 
-            # Display past messages
+            # Show messages
             messages = crud.get_messages(db, chat_id)
             for m in messages:
                 sender = "You" if m.sender_id == st.session_state.user.id else partner_user.username
                 st.write(f"**{sender}**: {m.content} ({m.timestamp})")
 
-            # Send new message
             msg = st.text_input("Type a message", key="msg_input")
             if st.button("Send"):
                 if msg.strip() != "":
