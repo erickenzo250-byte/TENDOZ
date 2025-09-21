@@ -1,6 +1,19 @@
-# 💖 Dating Site (Streamlit)
+# 💖 LoveConnect – Streamlit Dating Site
 
-A simple dating site demo built with Streamlit + SQLite.
+A modern dating site built with Streamlit + SQLite.  
+Ready for **GitHub upload** and **Streamlit Cloud deployment**.
+
+---
+
+## ✨ Features
+- Create user profiles with:
+  - Name, age, bio, interests
+  - Profile picture upload
+- Browse matches with:
+  - Search filters (age & interests)
+  - ❤️ Like button
+- SQLite database for persistence
+- Clean, mobile-friendly UI
 
 ---
 
