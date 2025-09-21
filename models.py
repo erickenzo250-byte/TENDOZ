@@ -9,3 +9,4 @@ class User(Base):
     age = Column(Integer)
     bio = Column(Text)
     interests = Column(String)
+    profile_pic = Column(String, nullable=True)
