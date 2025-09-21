@@ -10,16 +10,17 @@ class User(Base):
     gender = Column(String)
     bio = Column(String, default="")
     interests = Column(String, default="")
+    picture = Column(String, default="")  # store image filename
 
-class Match(Base):
-    __tablename__ = "matches"
-    id = Column(Integer, primary_key=True, index=True)
-    user1_id = Column(Integer, ForeignKey("users.id"))
-    user2_id = Column(Integer, ForeignKey("users.id"))
+class Like(Base):
+    __tablename__ = "likes"
+    id = Column(Integer, primary_key=True)
+    liker_id = Column(Integer, ForeignKey("users.id"))
+    liked_id = Column(Integer, ForeignKey("users.id"))
 
 class Message(Base):
     __tablename__ = "messages"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     chat_id = Column(String, index=True)
     sender_id = Column(Integer, ForeignKey("users.id"))
     receiver_id = Column(Integer, ForeignKey("users.id"))
