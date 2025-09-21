@@ -3,10 +3,11 @@ from backend.database import SessionLocal, engine, Base
 from backend import crud, models
 import os
 
+# Create tables
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
-st.set_page_config(page_title="💖 Dating App", layout="wide")
+st.set_page_config(page_title="💖 Dating App", layout="centered")
 
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -14,16 +15,41 @@ if "user" not in st.session_state:
 menu = ["My Profile", "Explore", "Matches", "Chat"]
 choice = st.sidebar.radio("Menu", menu)
 
+CARD_STYLE = """
+<style>
+.card {
+    border-radius: 15px;
+    padding: 10px;
+    margin-bottom: 15px;
+    background-color: #fff0f5;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+}
+.chat-you {
+    background-color: #c1f0c1;
+    border-radius: 10px;
+    padding: 5px;
+    margin: 2px;
+}
+.chat-partner {
+    background-color: #f0c1c1;
+    border-radius: 10px;
+    padding: 5px;
+    margin: 2px;
+}
+</style>
+"""
+st.markdown(CARD_STYLE, unsafe_allow_html=True)
+
 # --- MY PROFILE ---
 if choice == "My Profile":
     st.title("👤 My Profile")
     username = st.text_input("Username", "")
     age = st.number_input("Age", 18, 100, 25)
     gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-    bio = st.text_area("Bio")
-    interests = st.text_input("Interests (comma separated)")
+    bio = st.text_area("Bio", placeholder="Write something fun about yourself!")
+    interests = st.text_input("Interests (comma separated)", placeholder="🎵 Music, 🏀 Sports, 🎮 Gaming")
 
-    # Optional: profile picture upload
+    # Profile picture upload
     picture_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"])
     pic_filename = ""
     if picture_file:
@@ -45,16 +71,21 @@ elif choice == "Explore":
     else:
         users = crud.get_users(db, exclude_id=st.session_state.user.id)
         for u in users:
-            with st.container():
+            st.markdown(f'<div class="card">', unsafe_allow_html=True)
+            cols = st.columns([1, 2])
+            with cols[0]:
+                if u.picture and os.path.exists(u.picture):
+                    st.image(u.picture, width=80)
+                else:
+                    st.image("https://via.placeholder.com/80", width=80)
+            with cols[1]:
                 st.subheader(f"{u.username} ({u.age}, {u.gender})")
                 st.write(f"💬 {u.bio}")
                 st.write(f"✨ Interests: {u.interests}")
-                if u.picture and os.path.exists(u.picture):
-                    st.image(u.picture, width=150)
-                if st.button(f"Like {u.username}", key=f"like_{u.id}"):
+                if st.button(f"❤️ Like {u.username}", key=f"like_{u.id}"):
                     crud.like_user(db, st.session_state.user.id, u.id)
                     st.success(f"You liked {u.username}!")
-                st.markdown("---")
+            st.markdown("</div>", unsafe_allow_html=True)
 
 # --- MATCHES ---
 elif choice == "Matches":
@@ -67,12 +98,18 @@ elif choice == "Matches":
         if not matches:
             st.info("No matches yet. Like users to find matches!")
         for u in matches:
-            st.subheader(f"{u.username} ({u.age}, {u.gender})")
-            st.write(f"💬 {u.bio}")
-            st.write(f"✨ Interests: {u.interests}")
-            if u.picture and os.path.exists(u.picture):
-                st.image(u.picture, width=150)
-            st.markdown("---")
+            st.markdown(f'<div class="card">', unsafe_allow_html=True)
+            cols = st.columns([1, 2])
+            with cols[0]:
+                if u.picture and os.path.exists(u.picture):
+                    st.image(u.picture, width=80)
+                else:
+                    st.image("https://via.placeholder.com/80", width=80)
+            with cols[1]:
+                st.subheader(f"{u.username} ({u.age}, {u.gender})")
+                st.write(f"💬 {u.bio}")
+                st.write(f"✨ Interests: {u.interests}")
+            st.markdown("</div>", unsafe_allow_html=True)
 
 # --- CHAT ---
 elif choice == "Chat":
@@ -89,11 +126,12 @@ elif choice == "Chat":
             partner_user = next(u for u in matches if u.username == partner)
             chat_id = f"{min(st.session_state.user.id, partner_user.id)}-{max(st.session_state.user.id, partner_user.id)}"
 
-            # Show messages
             messages = crud.get_messages(db, chat_id)
             for m in messages:
-                sender = "You" if m.sender_id == st.session_state.user.id else partner_user.username
-                st.write(f"**{sender}**: {m.content} ({m.timestamp})")
+                if m.sender_id == st.session_state.user.id:
+                    st.markdown(f'<div class="chat-you">{m.content} ✅</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="chat-partner">{m.content}</div>', unsafe_allow_html=True)
 
             msg = st.text_input("Type a message", key="msg_input")
             if st.button("Send"):
