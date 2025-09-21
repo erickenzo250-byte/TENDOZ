@@ -1,0 +1,18 @@
+import os
+import requests
+
+os.makedirs("assets", exist_ok=True)
+
+sample_users = {
+    "alice": "https://via.placeholder.com/150/FFC0CB/000000?text=Alice",
+    "bob": "https://via.placeholder.com/150/87CEFA/000000?text=Bob",
+    "carol": "https://via.placeholder.com/150/FFD700/000000?text=Carol",
+    "dave": "https://via.placeholder.com/150/90EE90/000000?text=Dave"
+}
+
+for username, url in sample_users.items():
+    r = requests.get(url)
+    with open(f"assets/{username}.png", "wb") as f:
+        f.write(r.content)
+
+print("Assets folder populated with sample profile pictures.")
