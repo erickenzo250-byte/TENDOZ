@@ -1,2 +1,7 @@
-streamlit
+fastapi
+uvicorn
 sqlalchemy
+psycopg2-binary
+requests
+streamlit
+websockets
